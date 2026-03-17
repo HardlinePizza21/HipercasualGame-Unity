@@ -1,0 +1,12 @@
+/Library/
+/Temp/
+/Logs/
+/obj/
+/Build/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.pidb
+*.booproj
