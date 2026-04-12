@@ -19,54 +19,52 @@ public class RocketController : MonoBehaviour
     public bool  isLanded     = false;
     public float landCooldown = 0.5f;
 
+    [Header("Game Over")]
+    [SerializeField] private GameObject gameOverUI;
+
+    [Header("Puntuación")]
+    [SerializeField] private GameObject scoreCounter; // 🔥 CAMBIO AQUÍ
+
+    private bool gameEnded = false;
+
     private Vector2   startPosition;
-    private bool      isDragging         = false;
+    private bool      isDragging = false;
     private Rigidbody rb;
     private Camera    mainCamera;
-    private CapsuleCollider capsuleCollider;
-    private LineRenderer    lineRenderer;
+    private LineRenderer lineRenderer;
 
-    private Transform landedPlanet       = null;
-    private int       lastLandedPlanetID = -1;
-    private float     lastLandTime       = -999f;  // solo aplica al planeta de despegue
+    private int   lastLandedPlanetID = -1;
+    private float lastLandTime       = -999f;
 
     void Awake()
     {
-        rb              = GetComponent<Rigidbody>();
-        capsuleCollider = GetComponent<CapsuleCollider>();
-        mainCamera      = Camera.main;
-        lineRenderer    = GetComponent<LineRenderer>();
-
-        if (rb == null)
-            Debug.LogError("[RocketController] ❌ No se encontró Rigidbody en " + gameObject.name);
-        if (lineRenderer == null)
-            Debug.LogError("[RocketController] ❌ No se encontró LineRenderer en " + gameObject.name);
+        rb           = GetComponent<Rigidbody>();
+        mainCamera   = Camera.main;
+        lineRenderer = GetComponent<LineRenderer>();
 
         rb.constraints = RigidbodyConstraints.FreezePositionZ
                        | RigidbodyConstraints.FreezeRotationX
                        | RigidbodyConstraints.FreezeRotationY;
 
         HideLine();
+
+        if (gameOverUI != null)
+            gameOverUI.SetActive(false);
     }
 
-    // ─── Input ────────────────────────────────────────────────────────────────
+    // ─── INPUT ─────────────────────────────────────────
 
     public void OnClickPressed(InputValue value)
     {
-        if (!isLanded)
-        {
-            Debug.Log("[Press] No está aterrizado — ignorado.");
-            return;
-        }
+        if (gameEnded || !isLanded) return;
 
         startPosition = Mouse.current.position.ReadValue();
         isDragging    = true;
-        Debug.Log("[Press] Drag iniciado en: " + startPosition);
     }
 
     public void OnClickReleased(InputValue value)
     {
-        if (!isDragging) return;
+        if (gameEnded || !isDragging) return;
 
         Vector2 endPosition = Mouse.current.position.ReadValue();
         Vector3 finalForce  = CalculateForce(startPosition, endPosition);
@@ -75,80 +73,63 @@ public class RocketController : MonoBehaviour
 
         rb.isKinematic = false;
         isLanded       = false;
-        lastLandTime   = Time.time;  // cooldown arranca al despegar
-        landedPlanet   = null;
-        // ✅ lastLandedPlanetID se mantiene para el cooldown
+        lastLandTime   = Time.time;
 
         rb.AddForce(finalForce, ForceMode.Impulse);
 
         isDragging = false;
         HideLine();
-
-        Debug.Log($"[Release] Fuerza: {finalForce} | Magnitud: {finalForce.magnitude:F1}");
     }
 
     public void OnPointer(InputValue value)
     {
-        if (!isDragging) return;
+        if (gameEnded || !isDragging) return;
+
         UpdateLine(startPosition, value.Get<Vector2>());
     }
 
-    void Update()
+    // ─── FUERZA ────────────────────────────────────────
+
+    Vector3 CalculateForce(Vector2 start, Vector2 end)
     {
-        if (!isDragging) return;
+        Vector2 delta       = start - end;
+        Vector2 clamped     = Vector2.ClampMagnitude(delta, maxDragDistance);
+        float   t           = clamped.magnitude / maxDragDistance;
+        float   magnitude   = Mathf.Lerp(minForce, maxForce, t);
 
-        Vector2 currentScreenPos = Mouse.current.position.ReadValue();
-        Vector2 objectScreenPos  = mainCamera.WorldToScreenPoint(transform.position);
-        Vector2 rawDelta         = objectScreenPos - currentScreenPos;
-        Vector2 clampedDelta     = Vector2.ClampMagnitude(rawDelta, maxDragDistance);
-        float   t                = clampedDelta.magnitude / maxDragDistance;
+        float z = transform.position.z - mainCamera.transform.position.z;
 
-        Debug.DrawLine(transform.position, transform.position + (Vector3)(clampedDelta.normalized * t * lineMaxLength), Color.red);
-        Debug.DrawLine(Vector3.zero, transform.position, Color.yellow);
+        Vector3 zero = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2, Screen.height / 2, z));
+        Vector3 dir  = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2 + clamped.x, Screen.height / 2 + clamped.y, z));
+
+        Vector3 direction = (dir - zero).normalized;
+        direction.z = 0;
+
+        return direction * magnitude;
     }
 
-    // ─── Fuerza ───────────────────────────────────────────────────────────────
+    // ─── LÍNEA ─────────────────────────────────────────
 
-    Vector3 CalculateForce(Vector2 screenStart, Vector2 screenEnd)
+    void UpdateLine(Vector2 start, Vector2 end)
     {
-        Vector2 rawDelta       = screenStart - screenEnd;
-        Vector2 clampedDelta   = Vector2.ClampMagnitude(rawDelta, maxDragDistance);
-        float   t              = clampedDelta.magnitude / maxDragDistance;
-        float   forceMagnitude = Mathf.Lerp(minForce, maxForce, t);
+        Vector2 delta   = start - end;
+        Vector2 clamped = Vector2.ClampMagnitude(delta, maxDragDistance);
+        float   t       = clamped.magnitude / maxDragDistance;
 
-        float   objectZ        = transform.position.z - mainCamera.transform.position.z;
-        Vector3 zero           = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2f, Screen.height / 2f, objectZ));
-        Vector3 delta          = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2f + clampedDelta.x, Screen.height / 2f + clampedDelta.y, objectZ));
-        Vector3 directionWorld = (delta - zero).normalized;
-        directionWorld.z       = 0f;
+        float z = transform.position.z - mainCamera.transform.position.z;
 
-        return directionWorld.normalized * forceMagnitude;
-    }
+        Vector3 zero = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2, Screen.height / 2, z));
+        Vector3 dir  = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2 + clamped.x, Screen.height / 2 + clamped.y, z));
 
-    // ─── LineRenderer ─────────────────────────────────────────────────────────
+        Vector3 direction = (dir - zero).normalized;
+        direction.z = 0;
 
-    void UpdateLine(Vector2 screenStart, Vector2 screenEnd)
-    {
-        Vector2 rawDelta     = screenStart - screenEnd;
-        Vector2 clampedDelta = Vector2.ClampMagnitude(rawDelta, maxDragDistance);
-        float   t            = clampedDelta.magnitude / maxDragDistance;
+        Vector3 A = transform.position;
+        Vector3 B = A + direction * Mathf.Lerp(lineMinLength, lineMaxLength, t);
 
-        float   objectZ        = transform.position.z - mainCamera.transform.position.z;
-        Vector3 zero           = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2f, Screen.height / 2f, objectZ));
-        Vector3 delta          = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width / 2f + clampedDelta.x, Screen.height / 2f + clampedDelta.y, objectZ));
-        Vector3 directionWorld = (delta - zero).normalized;
-        directionWorld.z       = 0f;
-
-        Vector3 pointA = new Vector3(transform.position.x, transform.position.y, 0f);
-        float lineLength = Mathf.Lerp(lineMinLength, lineMaxLength, t);
-        Vector3 pointB   = pointA + directionWorld.normalized * lineLength;
-
-        lineRenderer.SetPosition(0, pointA);
-        lineRenderer.SetPosition(1, pointB);
-
-        lineRenderer.startColor = Color.Lerp(lineColorMin, lineColorMax, t);
-        lineRenderer.endColor   = Color.Lerp(lineColorMin, lineColorMax, t);
-        lineRenderer.enabled    = true;
+        lineRenderer.SetPosition(0, A);
+        lineRenderer.SetPosition(1, B);
+        lineRenderer.enabled = true;
     }
 
     void HideLine()
@@ -157,50 +138,61 @@ public class RocketController : MonoBehaviour
             lineRenderer.enabled = false;
     }
 
-    // ─── Aterrizaje ───────────────────────────────────────────────────────────
+    // ─── COLISIONES ────────────────────────────────────
 
     void OnCollisionEnter(Collision collision)
     {
-        if (!collision.gameObject.CompareTag("Planet")) return;
-
-        int incomingID = collision.gameObject.GetInstanceID();
-
-        // ✅ Solo aplicar cooldown si es el mismo planeta de despegue
-        bool isSamePlanet = incomingID == lastLandedPlanetID;
-        if (isSamePlanet && Time.time - lastLandTime < landCooldown)
+        if (collision.gameObject.CompareTag("Rock"))
         {
-            Debug.Log($"[Colisión] Ignorada — cooldown activo en planeta de origen ({Time.time - lastLandTime:F2}s / {landCooldown}s)");
+            if (gameEnded) return;
+
+            gameEnded = true;
+            isDragging = false;
+            HideLine();
+
+            rb.linearVelocity  = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+
+            if (gameOverUI != null)
+                gameOverUI.SetActive(true);
+
             return;
         }
 
-        ContactPoint contact  = collision.GetContact(0);
-        Vector3 surfaceNormal = contact.normal;
-        surfaceNormal.z       = 0f;
+        if (!collision.gameObject.CompareTag("Planet")) return;
 
-        Debug.Log($"[Colisión] Planeta: {collision.gameObject.name} | MismoPlaneta: {isSamePlanet}");
+        int id = collision.gameObject.GetInstanceID();
 
-        LandOnPlanet(collision.transform, surfaceNormal.normalized);
+        if (id == lastLandedPlanetID && Time.time - lastLandTime < landCooldown)
+            return;
+
+        LandOnPlanet(collision.transform);
     }
 
-    void LandOnPlanet(Transform planet, Vector3 surfaceNormal)
+    void LandOnPlanet(Transform planet)
     {
         rb.linearVelocity  = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         rb.isKinematic     = true;
 
-        float angle = Mathf.Atan2(surfaceNormal.y, surfaceNormal.x) * Mathf.Rad2Deg - 90f;
-        transform.rotation = Quaternion.Euler(0f, 0f, angle);
-
-        Vector3 newPos = transform.position + surfaceNormal * 0.1f;
-        newPos.z       = 0f;
-        transform.position = newPos;
-
         transform.SetParent(planet);
+        isLanded = true;
 
-        landedPlanet       = planet;
         lastLandedPlanetID = planet.gameObject.GetInstanceID();
-        isLanded           = true;
 
-        Debug.Log($"[Aterrizaje] En {planet.name} | ID: {lastLandedPlanetID} | Ángulo: {angle:F1}°");
+        // 🔥 SUMAR PUNTOS (ahora sí seguro funciona)
+        if (scoreCounter != null)
+        {
+            ScoreCounter sc = scoreCounter.GetComponent<ScoreCounter>();
+
+            if (sc != null)
+                sc.RegistrarAterrizajeEnPlaneta();
+            else
+                Debug.LogWarning("El objeto no tiene ScoreCounter.");
+        }
+        else
+        {
+            Debug.LogWarning("No asignaste ScoreCounter en el Inspector.");
+        }
     }
 }
