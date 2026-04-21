@@ -21,7 +21,18 @@ public class ScoreCounter : MonoBehaviour
     /// <summary>Llama esto cada vez que el cohete aterriza correctamente en un planeta.</summary>
     public void RegistrarAterrizajeEnPlaneta()
     {
-        _total += puntosPorAterrizaje;
+        SumarPuntos(puntosPorAterrizaje);
+    }
+
+    /// <summary>
+    /// Suma puntos genéricos (por ejemplo monedas) sin afectar el sistema actual.
+    /// </summary>
+    public void SumarPuntos(int cantidad)
+    {
+        _total += cantidad;
+        if (_total < 0)
+            _total = 0;
+
         ActualizarTexto();
     }
 

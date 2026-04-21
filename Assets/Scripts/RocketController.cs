@@ -22,6 +22,13 @@ public class RocketController : MonoBehaviour
     [Header("Game Over")]
     [SerializeField] private GameObject gameOverUI;
 
+    [Header("Vacío")]
+    [Tooltip("Si está activo, se pierde cuando la Y del cohete baja de este límite.")]
+    [SerializeField] private bool usarLimiteY = true;
+    [SerializeField] private float limiteYVacio = -10f;
+    [Tooltip("Tag opcional para zonas de muerte con Collider Is Trigger.")]
+    [SerializeField] private string tagZonaMuerte = "DeathZone";
+
     [Header("Puntuación")]
     [SerializeField] private GameObject scoreCounter;
 
@@ -53,6 +60,14 @@ public class RocketController : MonoBehaviour
 
         if (gameOverUI != null)
             gameOverUI.SetActive(false);
+    }
+
+    void Update()
+    {
+        if (gameEnded) return;
+
+        if (usarLimiteY && transform.position.y < limiteYVacio)
+            ActivarDerrota();
     }
 
     // ─── INPUT ─────────────────────────────────────────
@@ -170,18 +185,7 @@ public class RocketController : MonoBehaviour
         // 💥 ASTEROIDES → GAME OVER
         if (collision.gameObject.CompareTag("Rock"))
         {
-            if (gameEnded) return;
-
-            gameEnded = true;
-            isDragging = false;
-            HideLine();
-
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-
-            if (gameOverUI != null)
-                gameOverUI.SetActive(true);
-
+            ActivarDerrota();
             return;
         }
 
@@ -199,6 +203,36 @@ public class RocketController : MonoBehaviour
         surfaceNormal.z = 0f;
 
         LandOnPlanet(collision.transform, surfaceNormal.normalized);
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (gameEnded) return;
+
+        if (!string.IsNullOrEmpty(tagZonaMuerte) && other.CompareTag(tagZonaMuerte))
+            ActivarDerrota();
+    }
+
+    /// <summary>
+    /// Reutiliza la misma lógica de pérdida para rocas, vacío por Y y zona de muerte.
+    /// </summary>
+    public void ActivarDerrota()
+    {
+        if (gameEnded) return;
+
+        gameEnded = true;
+        isDragging = false;
+        isLanded = false;
+        HideLine();
+
+        transform.SetParent(null);
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.isKinematic = true; // Bloquea movimiento físico después de perder.
+
+        if (gameOverUI != null)
+            gameOverUI.SetActive(true);
     }
 
     void LandOnPlanet(Transform planet, Vector3 surfaceNormal)
