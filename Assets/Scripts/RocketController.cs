@@ -275,8 +275,9 @@ public class RocketController : MonoBehaviour
         rb.angularVelocity = Vector3.zero;
         rb.isKinematic = true;
 
-        float angle = Mathf.Atan2(surfaceNormal.y, surfaceNormal.x) * Mathf.Rad2Deg - 90f;
-        transform.rotation = Quaternion.Euler(0f, 0f, angle);
+        // 🔄 Alinea el "up" del cohete con la normal de la superficie
+        Quaternion targetRotation = Quaternion.FromToRotation(Vector3.up, surfaceNormal);
+        transform.rotation = targetRotation;
 
         Vector3 newPos = transform.position + surfaceNormal * 0.1f;
         newPos.z = 0f;
