@@ -16,21 +16,25 @@ public class RocketController : MonoBehaviour
     public Color lineColorMax = Color.red;
 
     [Header("Aterrizaje")]
-    public bool  isLanded     = false;
+    public bool isLanded = false;
     public float landCooldown = 0.5f;
 
     [Header("Game Over")]
     [SerializeField] private GameObject gameOverUI;
 
     [Header("Vacío")]
-    [Tooltip("Si está activo, se pierde cuando la Y del cohete baja de este límite.")]
     [SerializeField] private bool usarLimiteY = true;
     [SerializeField] private float limiteYVacio = -10f;
-    [Tooltip("Tag opcional para zonas de muerte con Collider Is Trigger.")]
     [SerializeField] private string tagZonaMuerte = "DeathZone";
 
     [Header("Puntuación")]
     [SerializeField] private GameObject scoreCounter;
+
+    [Header("🔥 Partículas de fuego")]
+    [SerializeField] private ParticleSystem fireParticles;
+
+    [Header("💥 Explosión")]
+    [SerializeField] private GameObject explosionPrefab;
 
     private bool gameEnded = false;
 
@@ -38,17 +42,14 @@ public class RocketController : MonoBehaviour
     private bool isDragging = false;
     private Rigidbody rb;
     private Camera mainCamera;
-    private CapsuleCollider capsuleCollider;
     private LineRenderer lineRenderer;
 
     private Transform landedPlanet = null;
-    private int lastLandedPlanetID = -1;
     private float lastLandTime = -999f;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        capsuleCollider = GetComponent<CapsuleCollider>();
         mainCamera = Camera.main;
         lineRenderer = GetComponent<LineRenderer>();
 
@@ -60,17 +61,33 @@ public class RocketController : MonoBehaviour
 
         if (gameOverUI != null)
             gameOverUI.SetActive(false);
+
+        if (fireParticles != null)
+            fireParticles.Stop();
     }
 
     void Update()
     {
         if (gameEnded) return;
 
+        // 🔥 fuego mientras vuela
+        if (!isLanded && rb.linearVelocity.magnitude > 0.1f)
+        {
+            if (fireParticles != null && !fireParticles.isPlaying)
+                fireParticles.Play();
+        }
+        else
+        {
+            if (fireParticles != null && fireParticles.isPlaying)
+                fireParticles.Stop();
+        }
+
+        // ☠️ caída al vacío
         if (usarLimiteY && transform.position.y < limiteYVacio)
             ActivarDerrota();
     }
 
-    // ─── INPUT ─────────────────────────────────────────
+    // ─── INPUT ─────────────────────────────
 
     public void OnClickPressed(InputValue value)
     {
@@ -106,7 +123,7 @@ public class RocketController : MonoBehaviour
         UpdateLine(startPosition, value.Get<Vector2>());
     }
 
-    // ─── FUERZA ────────────────────────────────────────
+    // ─── FUERZA ─────────────────────────────
 
     Vector3 CalculateForce(Vector2 screenStart, Vector2 screenEnd)
     {
@@ -127,7 +144,7 @@ public class RocketController : MonoBehaviour
         return directionWorld * forceMagnitude;
     }
 
-    // ─── LINE RENDERER ─────────────────────────────────
+    // ─── LINE RENDERER ─────────────────────
 
     void UpdateLine(Vector2 screenStart, Vector2 screenEnd)
     {
@@ -161,11 +178,11 @@ public class RocketController : MonoBehaviour
             lineRenderer.enabled = false;
     }
 
-    // ─── COLISIONES ────────────────────────────────────
+    // ─── COLISIONES ────────────────────────
 
     void OnCollisionEnter(Collision collision)
     {
-        // 🏁 PLANETA FINAL → VICTORIA
+        // 🏁 victoria
         FinalPlanetController finalPlanet = collision.gameObject.GetComponent<FinalPlanetController>();
         if (finalPlanet != null)
         {
@@ -178,25 +195,22 @@ public class RocketController : MonoBehaviour
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
 
+            if (fireParticles != null)
+                fireParticles.Stop();
+
             finalPlanet.MostrarFelicitaciones();
             return;
         }
-        
-        // 💥 ASTEROIDES → GAME OVER
+
+        // 💥 roca
         if (collision.gameObject.CompareTag("Rock"))
         {
             ActivarDerrota();
             return;
         }
 
-        // 🌍 PLANETAS → ATERRIZAJE (TU LÓGICA ORIGINAL)
+        // 🌍 planeta
         if (!collision.gameObject.CompareTag("Planet")) return;
-
-        int incomingID = collision.gameObject.GetInstanceID();
-        bool isSamePlanet = incomingID == lastLandedPlanetID;
-
-        if (isSamePlanet && Time.time - lastLandTime < landCooldown)
-            return;
 
         ContactPoint contact = collision.GetContact(0);
         Vector3 surfaceNormal = contact.normal;
@@ -213,9 +227,8 @@ public class RocketController : MonoBehaviour
             ActivarDerrota();
     }
 
-    /// <summary>
-    /// Reutiliza la misma lógica de pérdida para rocas, vacío por Y y zona de muerte.
-    /// </summary>
+    // ─── DERROTA ───────────────────────────
+
     public void ActivarDerrota()
     {
         if (gameEnded) return;
@@ -229,11 +242,32 @@ public class RocketController : MonoBehaviour
 
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
-        rb.isKinematic = true; // Bloquea movimiento físico después de perder.
+        rb.isKinematic = true;
+
+        // 💥 EXPLOSIÓN
+        if (explosionPrefab != null)
+        {
+            GameObject explosion = Instantiate(
+                explosionPrefab,
+                transform.position,
+                Quaternion.identity
+            );
+
+            Destroy(explosion, 2f);
+        }
+
+        // 🔥 apagar fuego
+        if (fireParticles != null)
+            fireParticles.Stop();
+
+        // 🚀 ocultar cohete
+        gameObject.SetActive(false);
 
         if (gameOverUI != null)
             gameOverUI.SetActive(true);
     }
+
+    // ─── ATERRIZAJE ────────────────────────
 
     void LandOnPlanet(Transform planet, Vector3 surfaceNormal)
     {
@@ -251,10 +285,11 @@ public class RocketController : MonoBehaviour
         transform.SetParent(planet);
 
         landedPlanet = planet;
-        lastLandedPlanetID = planet.gameObject.GetInstanceID();
         isLanded = true;
 
-        // 🧮 SCORE
+        if (fireParticles != null)
+            fireParticles.Stop();
+
         if (scoreCounter != null)
         {
             ScoreCounter sc = scoreCounter.GetComponent<ScoreCounter>();
