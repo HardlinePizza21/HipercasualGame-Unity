@@ -1,15 +1,20 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System.Collections;
 
-/// <summary>
-/// Gestor global de niveles. Maneja la progresión entre niveles.
-/// </summary>
 public class LevelManager : MonoBehaviour
 {
     public static LevelManager Instance { get; private set; }
 
-    [SerializeField] private string[] levelScenes = { "planet_level1", "planet_level2" };
+    [SerializeField] private string[] levelScenes = { "planet_level1", "planet_level2", "planet_level3", "planet_level4", "planet_level5" };
     private int currentLevelIndex = 0;
+
+    // ─── PUNTUACIÓN ────────────────────────
+    private int puntosAcumulados = 0;
+    private int record = 0;
+
+    public int PuntosAcumulados => puntosAcumulados;
+    public int Record => record;
 
     void Awake()
     {
@@ -22,62 +27,92 @@ public class LevelManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        Debug.Log($"[LevelManager] Creado - Nivel inicial: {currentLevelIndex}");
+        // Cargar record guardado
+        record = PlayerPrefs.GetInt("Record", 0);
     }
 
-    /// <summary>
-    /// Completa el nivel actual y carga el siguiente
-    /// </summary>
+    /// <summary>Llamado por ScoreCounter al sumar puntos</summary>
+    public void AgregarPuntos(int cantidad)
+    {
+        puntosAcumulados += cantidad;
+    }
+
+    /// <summary>Reinicia puntos de la run actual (al morir)</summary>
+    public void ReiniciarPuntos()
+    {
+        puntosAcumulados = 0;
+    }
+
+    /// <summary>Guarda record si los puntos actuales lo superan</summary>
+    private void IntentarGuardarRecord()
+    {
+        if (puntosAcumulados > record)
+        {
+            record = puntosAcumulados;
+            PlayerPrefs.SetInt("Record", record);
+            PlayerPrefs.Save();
+        }
+    }
+
     public void CompletarNivel()
     {
-        Debug.Log($"[LevelManager] CompletarNivel() llamado - Nivel actual: {currentLevelIndex}");
-        
         currentLevelIndex++;
 
         if (currentLevelIndex < levelScenes.Length)
         {
-            Debug.Log($"[LevelManager] Cargando nivel: {levelScenes[currentLevelIndex]} (índice {currentLevelIndex})");
             SceneManager.LoadScene(levelScenes[currentLevelIndex]);
         }
         else
         {
+            // Todos los niveles completados — guardar record
+            IntentarGuardarRecord();
             Debug.Log("[LevelManager] ¡🎉 TODOS LOS NIVELES COMPLETADOS!");
             Time.timeScale = 0f;
         }
     }
-
-    /// <summary>
-    /// Reinicia el nivel actual
-    /// </summary>
-    public void ReiniciarNivel()
+    public void VolverAlMenuVictoriaConDelay(float delay)
     {
-        SceneManager.LoadScene(levelScenes[currentLevelIndex]);
+        StartCoroutine(RoutineVictoria(delay));
     }
 
-    /// <summary>
-    /// Vuelve al menú y reinicia el progreso
-    /// </summary>
-    public void VolverAlMenu()
+    private IEnumerator RoutineVictoria(float delay)
     {
+        yield return new WaitForSecondsRealtime(delay); // ← ignora timeScale
+        IntentarGuardarRecord();
+        ReiniciarPuntos();
         Time.timeScale = 1f;
         currentLevelIndex = 0;
         Destroy(gameObject);
         SceneManager.LoadScene("menu");
     }
 
-    /// <summary>
-    /// Obtiene el nivel actual (1-indexed para mostrar al usuario)
-    /// </summary>
-    public int GetNivelActual()
+
+    public void ReiniciarNivel()
     {
-        return currentLevelIndex + 1;
+        SceneManager.LoadScene(levelScenes[currentLevelIndex]);
     }
 
-    /// <summary>
-    /// Obtiene el total de niveles
-    /// </summary>
-    public int GetTotalNiveles()
+    public void VolverAlMenu()
     {
-        return levelScenes.Length;
+        // Al morir se llama esto — reiniciar puntos y volver
+        ReiniciarPuntos();
+        Time.timeScale = 1f;
+        currentLevelIndex = 0;
+        Destroy(gameObject);
+        SceneManager.LoadScene("menu");
     }
+
+    public void VolverAlMenuConDelay(float delay)
+    {
+        StartCoroutine(RoutineVolverAlMenu(delay));
+    }
+
+    private IEnumerator RoutineVolverAlMenu(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        VolverAlMenu();
+    }
+
+    public int GetNivelActual() => currentLevelIndex + 1;
+    public int GetTotalNiveles() => levelScenes.Length;
 }

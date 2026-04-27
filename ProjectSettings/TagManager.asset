@@ -6,6 +6,8 @@ TagManager:
   tags:
   - Planet
   - Rock
+  - Rocket
+  - DeathZone
   layers:
   - Default
   - TransparentFX

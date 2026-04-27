@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections;
 
 public class RocketController : MonoBehaviour
 {
@@ -17,7 +18,7 @@ public class RocketController : MonoBehaviour
 
     [Header("Aterrizaje")]
     public bool isLanded = false;
-    public float landCooldown = 0.5f;
+    public float landCooldown = 1f;
 
     [Header("Game Over")]
     [SerializeField] private GameObject gameOverUI;
@@ -25,7 +26,7 @@ public class RocketController : MonoBehaviour
     [Header("Vacío")]
     [SerializeField] private bool usarLimiteY = true;
     [SerializeField] private float limiteYVacio = -10f;
-    [SerializeField] private string tagZonaMuerte = "DeathZone";
+
 
     [Header("Puntuación")]
     [SerializeField] private GameObject scoreCounter;
@@ -51,6 +52,8 @@ public class RocketController : MonoBehaviour
     private LineRenderer lineRenderer;
 
     private Transform landedPlanet = null;
+    private Transform lastPlanet = null; // ← nueva variable solo para el cooldown
+    
     private float lastLandTime = -999f;
 
     void Awake()
@@ -121,6 +124,7 @@ public class RocketController : MonoBehaviour
         rb.isKinematic = false;
         isLanded = false;
         lastLandTime = Time.time;
+        lastPlanet = landedPlanet; // ← guarda cuál era antes de limpiar
         landedPlanet = null;
 
         rb.AddForce(finalForce, ForceMode.Impulse);
@@ -224,6 +228,12 @@ public class RocketController : MonoBehaviour
         // 🌍 planeta
         if (!collision.gameObject.CompareTag("Planet")) return;
 
+        // ⏱️ Cooldown: bloquear reaterrizaje en el planeta del que acaba de salir
+        bool esMismoPlaneta = collision.transform == lastPlanet;
+        bool enCooldown = (Time.time - lastLandTime) < landCooldown;
+
+        if (esMismoPlaneta && enCooldown) return;
+
         ContactPoint contact = collision.GetContact(0);
         Vector3 surfaceNormal = contact.normal;
         surfaceNormal.z = 0f;
@@ -231,13 +241,6 @@ public class RocketController : MonoBehaviour
         LandOnPlanet(collision.transform, surfaceNormal.normalized);
     }
 
-    void OnTriggerEnter(Collider other)
-    {
-        if (gameEnded) return;
-
-        if (!string.IsNullOrEmpty(tagZonaMuerte) && other.CompareTag(tagZonaMuerte))
-            ActivarDerrota();
-    }
 
     // ─── DERROTA ───────────────────────────
 
@@ -288,7 +291,12 @@ public class RocketController : MonoBehaviour
 
         if (gameOverUI != null)
             gameOverUI.SetActive(true);
+
+        // 🏠 Volver al menú
+        if (LevelManager.Instance != null)
+            LevelManager.Instance.VolverAlMenuConDelay(1f);
     }
+
 
     // ─── ATERRIZAJE ────────────────────────
 

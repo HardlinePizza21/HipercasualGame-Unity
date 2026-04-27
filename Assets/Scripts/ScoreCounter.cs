@@ -33,6 +33,10 @@ public class ScoreCounter : MonoBehaviour
         if (_total < 0)
             _total = 0;
 
+        // Notificar al LevelManager para acumular entre niveles
+        if (LevelManager.Instance != null)
+            LevelManager.Instance.AgregarPuntos(cantidad);
+
         ActualizarTexto();
     }
 

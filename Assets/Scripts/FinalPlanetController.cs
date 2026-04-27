@@ -8,7 +8,7 @@ public class FinalPlanetController : MonoBehaviour
     [Header("UI Felicitaciones")]
     [SerializeField] private GameObject panelFelicitaciones;
     [SerializeField] private bool pausarJuego = true;
-    [SerializeField] private float delayCargaNivelSiguiente = 2f;
+    [SerializeField] private float delayCargaNivelSiguiente = 1f;
 
     [Header("Barra de Carga")]
     [SerializeField] private Image barraProgreso;
