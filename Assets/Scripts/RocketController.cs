@@ -36,6 +36,12 @@ public class RocketController : MonoBehaviour
     [Header("💥 Explosión")]
     [SerializeField] private GameObject explosionPrefab;
 
+    [Header("🎵 Sonidos")]
+    [Tooltip("Asigna un AudioSource con Loop activado para el sonido de vuelo")]
+    [SerializeField] private AudioSource audioSourceVuelo;
+    [Tooltip("Clip de sonido que suena al explotar o caer")]
+    [SerializeField] private AudioClip clipExplosion;
+
     private bool gameEnded = false;
 
     private Vector2 startPosition;
@@ -70,16 +76,22 @@ public class RocketController : MonoBehaviour
     {
         if (gameEnded) return;
 
-        // 🔥 fuego mientras vuela
+        // 🔥 fuego y sonido mientras vuela
         if (!isLanded && rb.linearVelocity.magnitude > 0.1f)
         {
             if (fireParticles != null && !fireParticles.isPlaying)
                 fireParticles.Play();
+
+            if (audioSourceVuelo != null && !audioSourceVuelo.isPlaying)
+                audioSourceVuelo.Play();
         }
         else
         {
             if (fireParticles != null && fireParticles.isPlaying)
                 fireParticles.Stop();
+
+            if (audioSourceVuelo != null && audioSourceVuelo.isPlaying)
+                audioSourceVuelo.Stop();
         }
 
         // ☠️ caída al vacío
@@ -254,6 +266,17 @@ public class RocketController : MonoBehaviour
             );
 
             Destroy(explosion, 2f);
+        }
+
+        // 🔊 SONIDO DE EXPLOSIÓN Y DETENCIÓN DE VUELO
+        if (clipExplosion != null)
+        {
+            // Usar PlayClipAtPoint para que el sonido no se corte cuando el gameObject se desactive
+            AudioSource.PlayClipAtPoint(clipExplosion, transform.position);
+        }
+        if (audioSourceVuelo != null && audioSourceVuelo.isPlaying)
+        {
+            audioSourceVuelo.Stop();
         }
 
         // 🔥 apagar fuego
