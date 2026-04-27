@@ -15,6 +15,10 @@ public class CoinCollectible : MonoBehaviour
     [SerializeField] private float amplitud = 0.25f;
     [SerializeField] private float velocidad = 1.5f;
 
+    [Header("Sonido")]
+    [Tooltip("Clip de sonido que se reproducirá al recoger la moneda")]
+    [SerializeField] private AudioClip sonidoRecoleccion;
+
     private Vector3 posicionBase;
 
     void Awake()
@@ -35,6 +39,12 @@ public class CoinCollectible : MonoBehaviour
 
         if (scoreCounter != null)
             scoreCounter.SumarPuntos(puntosPorMoneda);
+
+        if (sonidoRecoleccion != null)
+        {
+            // Reproduce el sonido de forma independiente para que no se corte al destruir la moneda
+            AudioSource.PlayClipAtPoint(sonidoRecoleccion, transform.position);
+        }
 
         Destroy(gameObject);
     }
